@@ -1,4 +1,4 @@
-name: Build rtl8812au Kernel Module (GKI 5.15 Android13)
+name: Build rtl8812au Kernel Module (WildKernels Config)
 
 on:
   workflow_dispatch:
@@ -15,73 +15,61 @@ on:
 jobs:
   build-module:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y repo flex bison build-essential libssl-dev gcc-aarch64-linux-gnu clang lld llvm make
+          sudo apt-get install -y repo flex bison build-essential libssl-dev \
+            gcc-aarch64-linux-gnu clang lld llvm make wget unzip \
+            ccache # WildKernels 构建环境依赖 ccache
 
-      - name: Initialize and sync kernel repository
-        id: sync_kernel
-        working-directory: ${{ github.workspace }}
-        env:
-          VERSION: ${{ github.event.inputs.kernel_version }}
-          OS_PATCH_LEVEL: ${{ github.event.inputs.os_patch_level }}
+      - name: Checkout WildKernels repository (for build scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: WildKernels/GKI_KernelSU_SUSFS
+          path: wildkernels
+          ref: 8863e4e04ee554e50b431031375bf8ed475eec9a
+
+      # --- 1. 下载并准备内核源码（复用 WildKernels 的 download-kernel action）---
+      - name: Download Kernel Source
+        uses: ./wildkernels/.github/actions/download-kernel
+        with:
+          version: ${{ github.event.inputs.kernel_version }}
+          android_version: ${{ github.event.inputs.kernel_version }}
+          kernel_version: ${{ github.event.inputs.kernel_version }}
+          os_patch_level: ${{ github.event.inputs.os_patch_level }}
+
+      # --- 2. 设置构建环境（复用 WildKernels 的 setup-build-environment action）---
+      - name: Setup Build Environment
+        uses: ./wildkernels/.github/actions/setup-build-environment
+        with:
+          version: ${{ github.event.inputs.kernel_version }}
+          sublevel: '194' # 根据你的内核版本调整，例如 5.15.194 中的 194
+
+      # --- 3. 生成内核配置（复用 WildKernels 的 build-kernel action）---
+      # 这一步会执行 build/build.sh 或 Bazel，生成完整的 .config 文件
+      - name: Generate Kernel Config
+        uses: ./wildkernels/.github/actions/build-kernel
+        with:
+          version: ${{ github.event.inputs.kernel_version }}
+          bypass: 'false' # 根据 WildKernels 的输入参数决定，通常为 false
+
+      # --- 4. 准备外部模块编译环境 ---
+      - name: Prepare for external module build
+        working-directory: ${{ github.workspace }}/kernel
         run: |
-          set -euo pipefail
-          mkdir -p kernel
-          cd kernel
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export LLVM=1
+          export OUT_DIR=${{ github.workspace }}/kernel/out
 
-          ANDROID_PART="${VERSION%-*}"
-          KERNEL_PART="${VERSION#*-}"
-          FORMATTED_BRANCH="${ANDROID_PART}-${KERNEL_PART}-${OS_PATCH_LEVEL}"
-          echo "目标分支: common-${FORMATTED_BRANCH}"
+          # 确保 .config 存在（由 build-kernel 生成）
+          # 清理并准备模块编译
+          make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
+          make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
 
-          init_repo() {
-            repo init -u https://android.googlesource.com/kernel/manifest \
-              -b common-${FORMATTED_BRANCH} --depth=1 || return 1
-            REMOTE_BRANCH=$(git ls-remote https://android.googlesource.com/kernel/common \
-              ${FORMATTED_BRANCH} 2>/dev/null || true)
-            if [[ -n "$REMOTE_BRANCH" ]] && grep -q deprecated <<< "$REMOTE_BRANCH"; then
-              sed -i "s/\"${FORMATTED_BRANCH}\"/\"deprecated\/${FORMATTED_BRANCH}\"/g" \
-                .repo/manifests/default.xml
-              echo "⚠️  分支 common-${FORMATTED_BRANCH} 已弃用，使用 deprecated/ 路径"
-            fi
-            return 0
-          }
-
-          MAX_RETRIES=3
-          for attempt in $(seq 1 $MAX_RETRIES); do
-            echo "尝试 $attempt/$MAX_RETRIES 初始化 repo..."
-            if init_repo; then
-              echo "repo init 成功，开始同步..."
-              if timeout 15m repo sync -c --current-branch --no-clone-bundle --no-tags \
-                --jobs-checkout=4 -j4; then
-                echo "内核源码同步完成"
-                break
-              else
-                echo "repo sync 失败"
-              fi
-            else
-              echo "repo init 失败"
-            fi
-            if [ $attempt -lt $MAX_RETRIES ]; then
-              echo "清理并重试..."
-              rm -rf .repo
-              sleep 15
-            else
-              echo "所有重试均失败" >&2
-              exit 1
-            fi
-          done
-
-          cd common
-          if [ -d .git ]; then
-            echo "KERNEL_COMMIT_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
-            echo "KERNEL_COMMIT_DATE=$(git log -1 --format=%cI)" >> $GITHUB_ENV
-            echo "KERNEL_COMMIT_MSG=$(git log -1 --format=%s)" >> $GITHUB_ENV
-          fi
-
+      # --- 5. 编译 rtl8812au 外部模块 ---
       - name: Checkout rtl8812au driver (lwfinger/rtw88)
         uses: actions/checkout@v4
         with:
@@ -89,32 +77,15 @@ jobs:
           path: rtw88
           ref: master
 
-      # ---------- 新增：准备内核配置和模块编译环境 ----------
-      - name: Prepare kernel build for external modules
-        working-directory: ${{ github.workspace }}/kernel/common
-        run: |
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export LLVM=1
-          export OUT_DIR=${{ github.workspace }}/kernel/out
-
-          # 生成默认配置文件（如果已有 .config 则沿用，否则生成）
-          make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
-          # 准备模块编译所需的所有中间文件
-          make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
-        shell: bash
-
-      # ---------- 编译外部模块 ----------
       - name: Compile rtl8812au kernel module
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export LLVM=1
-          export KERNEL_DIR=${{ github.workspace }}/kernel/common
+          export KERNEL_DIR=${{ github.workspace }}/kernel
           export OUT_DIR=${{ github.workspace }}/kernel/out
 
           make -C $KERNEL_DIR O=$OUT_DIR M=${{ github.workspace }}/rtw88 modules
-        shell: bash
 
       - name: Upload compiled modules
         uses: actions/upload-artifact@v4
