@@ -38,7 +38,7 @@ jobs:
           echo "=== Building rekernel.ko for KMI: $KMI ==="
 
           # sources -> in-tree binder dir (skip Makefile/Kconfig/README)
-          cp ./LKM-Source/*.c ./LKM-Source/*.h /opt/ddk/src/$KMI/drivers/android/
+          cp ./*.c ./*.h /opt/ddk/src/$KMI/drivers/android/
           cat ./LKM-Source/Makefile >> /opt/ddk/src/$KMI/drivers/android/Makefile
 
           # Build
