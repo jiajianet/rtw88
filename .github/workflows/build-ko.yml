@@ -1,4 +1,4 @@
-name: Build rtl8812au Kernel Module (WildKernels Config)
+name: Build rtl8812au Kernel Module (Using config.gz)
 
 on:
   workflow_dispatch:
@@ -12,34 +12,35 @@ on:
         required: false
         default: '2025-12'
       sublevel:
-        description: 'Kernel sublevel (e.g., 194 for 5.15.194)'
+        description: 'Kernel sublevel (e.g., 194)'
         required: false
         default: '194'
+      config_gz_url:
+        description: 'Public URL to your config.gz file'
+        required: true  # 强制用户提供
 
 jobs:
   build-module:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y repo flex bison build-essential libssl-dev \
-            gcc-aarch64-linux-gnu clang lld llvm make wget unzip ccache
+            gcc-aarch64-linux-gnu clang lld llvm make wget unzip
 
-      # 检出 WildKernels 仓库（包含其自定义的 Actions）
-      - name: Checkout WildKernels repository
+      # 下载内核源码（复用 WildKernels 的 download-kernel Action）
+      - name: Checkout WildKernels repository (for actions)
         uses: actions/checkout@v4
         with:
           repository: WildKernels/GKI_KernelSU_SUSFS
           path: wildkernels
           ref: 8863e4e04ee554e50b431031375bf8ed475eec9a
 
-      # --- 关键修复：创建内核源码目录 ---
       - name: Create kernel directory
         run: mkdir -p ${{ github.workspace }}/kernel
 
-      # --- 1. 下载内核源码（复用 WildKernels 的 download-kernel Action）---
       - name: Download Kernel Source
         uses: ./wildkernels/.github/actions/download-kernel
         with:
@@ -48,30 +49,40 @@ jobs:
           kernel_version: ${{ github.event.inputs.kernel_version }}
           os_patch_level: ${{ github.event.inputs.os_patch_level }}
 
-      # --- 2. 设置构建环境（复用 WildKernels 的 setup-build-environment Action）---
       - name: Setup Build Environment
         uses: ./wildkernels/.github/actions/setup-build-environment
         with:
           version: ${{ github.event.inputs.kernel_version }}
           sublevel: ${{ github.event.inputs.sublevel }}
 
-      # --- 3. 生成内核配置（复用 WildKernels 的 build-kernel Action）---
-      # 这一步会完整编译内核并生成 .config 文件（由于我们只关心配置，后续 modules_prepare 会直接使用它）
-      - name: Generate Kernel Config
-        uses: ./wildkernels/.github/actions/build-kernel
-        with:
-          version: ${{ github.event.inputs.kernel_version }}
-          bypass: 'false'
+      - name: Extract config from repository
+        working-directory: ${{ github.workspace }}/kernel
+        run: |
+          gunzip -c ${{ github.workspace }}/config.gz > .config
+          mkdir -p out
+          cp .config out/.config
+    
+      # 准备模块编译
+      - name: Prepare for external module build
+        working-directory: ${{ github.workspace }}/kernel
+        run: |
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export LLVM=1
+          export OUT_DIR=${{ github.workspace }}/kernel/out
 
-      # --- 5. 编译 rtl8812au 外部模块 ---
-      - name: Checkout rtl8812au driver (lwfinger/rtw88)
+          make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
+          make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
+
+      # 编译 rtl8812au
+      - name: Checkout rtl8812au driver
         uses: actions/checkout@v4
         with:
           repository: lwfinger/rtw88
           path: rtw88
           ref: master
 
-      - name: Compile rtl8812au kernel module
+      - name: Compile module
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
@@ -81,7 +92,7 @@ jobs:
 
           make -C $KERNEL_DIR O=$OUT_DIR M=${{ github.workspace }}/rtw88 modules
 
-      - name: Upload compiled modules
+      - name: Upload modules
         uses: actions/upload-artifact@v4
         with:
           name: rtl8812au-modules
