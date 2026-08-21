@@ -55,12 +55,12 @@ jobs:
           # Artifact
           mkdir -p /github/workspace/out
           OUTPUT_NAME="rekernel-${{ inputs.kmi }}-${{ inputs.ddk_release }}.ko"
-          cp /opt/ddk/src/$KMI/drivers/android/*.ko "/github/workspace/out/$OUTPUT_NAME"
-          llvm-strip -d "/github/workspace/out/$OUTPUT_NAME"
-          ls -la "/github/workspace/out/$OUTPUT_NAME"
+          cp /opt/ddk/src/$KMI/drivers/android/rtw_core.ko "/github/workspace/out/rtw_core.ko"
+          llvm-strip -d "/github/workspace/out/rtw_core.ko"
+          ls -la "/github/workspace/out/rtw_core.ko"
 
       - name: Upload rekernel.ko artifact
         uses: actions/upload-artifact@v7
         with:
           name: rekernel-${{ inputs.kmi }}-${{ inputs.ddk_release }}.ko
-          path: /github/workspace/out/rekernel-${{ inputs.kmi }}-${{ inputs.ddk_release }}.ko
+          path: /github/workspace/rtw_core.ko
