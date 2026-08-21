@@ -56,7 +56,7 @@ jobs:
       - name: Checkout rtl8812au driver
         uses: actions/checkout@v4
         with:
-          repository: lwfinger/rtw88
+          repository: jiajianet/rtw88
           path: rtw88
           ref: master
           
