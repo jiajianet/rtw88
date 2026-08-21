@@ -39,7 +39,7 @@ jobs:
 
           # sources -> in-tree binder dir (skip Makefile/Kconfig/README)
           cp ./*.c ./*.h /opt/ddk/src/$KMI/drivers/android/
-          cat ./LKM-Source/Makefile >> /opt/ddk/src/$KMI/drivers/android/Makefile
+          cat ./Makefile >> /opt/ddk/src/$KMI/drivers/android/Makefile
 
           # Build
           cd /opt/ddk/src/$KMI
