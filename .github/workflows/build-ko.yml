@@ -1,0 +1,66 @@
+name: Build rtl8812au Kernel Module (GKI 5.15 Android13)
+
+on:
+  workflow_dispatch:
+    # Optional inputs for flexibility, but defaults are set to the required target
+    inputs:
+      kernel_version:
+        description: 'Kernel version (e.g., android13-5.15)'
+        required: false
+        default: 'android13-5.15'
+      os_patch_level:
+        description: 'OS patch level (e.g., 2025-12)'
+        required: false
+        default: '2025-12'
+
+jobs:
+  build-module:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (includes actions)
+        uses: actions/checkout@v4
+
+      - name: Download GKI kernel source
+        uses: ./.github/actions/download-kernel
+        with:
+          android_version: 'android13'
+          kernel_version: '5.15'
+          version: ${{ inputs.kernel_version }}
+          os_patch_level: ${{ inputs.os_patch_level }}
+
+      - name: Build kernel with bypass hack (disable module version checks)
+        uses: ./.github/actions/build-kernel
+        with:
+          bypass: true
+          version: ${{ inputs.kernel_version }}
+
+      - name: Checkout rtl8812au driver (lwfinger/rtw88)
+        uses: actions/checkout@v4
+        with:
+          repository: lwfinger/rtw88
+          path: rtw88
+          ref: master
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y clang lld llvm make
+
+      - name: Compile rtl8812au kernel module
+        run: |
+          # Use the same toolchain and output directory as the kernel build
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export LLVM=1
+          export KERNEL_DIR=${{ github.workspace }}/kernel/common
+          export OUT_DIR=/home/runner/out   # matches build-kernel action
+
+          # Build external modules (rtw88 will build all supported modules)
+          make -C $KERNEL_DIR O=$OUT_DIR M=${{ github.workspace }}/rtw88 modules
+        shell: bash
+
+      - name: Upload compiled modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtl8812au-modules
+          path: rtw88/*.ko
