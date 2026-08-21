@@ -52,6 +52,9 @@ jobs:
           version: ${{ github.event.inputs.kernel_version }}
           sublevel: ${{ github.event.inputs.sublevel }}
 
+      - name: List files in workspace
+        run: ls -la ${{ github.workspace }}
+        
       - name: Extract config from repository
         working-directory: ${{ github.workspace }}/kernel
         run: |
