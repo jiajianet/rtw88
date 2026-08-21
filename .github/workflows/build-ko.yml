@@ -31,6 +31,14 @@ jobs:
           path: wildkernels
           ref: 8863e4e04ee554e50b431031375bf8ed475eec9a
 
+      
+      - name: Checkout rtl8812au driver (lwfinger/rtw88)
+        uses: actions/checkout@v4
+        with:
+          repository: lwfinger/rtw88
+          path: rtw88
+          ref: master
+
       # --- 1. 下载并准备内核源码（复用 WildKernels 的 download-kernel action）---
       - name: Download Kernel Source
         uses: ./wildkernels/.github/actions/download-kernel
@@ -68,14 +76,6 @@ jobs:
           # 清理并准备模块编译
           make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
           make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
-
-      # --- 5. 编译 rtl8812au 外部模块 ---
-      - name: Checkout rtl8812au driver (lwfinger/rtw88)
-        uses: actions/checkout@v4
-        with:
-          repository: lwfinger/rtw88
-          path: rtw88
-          ref: master
 
       - name: Compile rtl8812au kernel module
         run: |
