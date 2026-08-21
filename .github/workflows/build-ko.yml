@@ -61,12 +61,12 @@ jobs:
           ref: master
           
       - name: List files in workspace
-        run: ls -la ${{ github.workspace }}
+        run: ls -la ${{ github.workspace }}/rtw88
         
       - name: Extract config from repository
         working-directory: ${{ github.workspace }}/kernel
         run: |
-          gunzip -c ${{ github.workspace }}/config.gz > .config
+          gunzip -c ${{ github.workspace }}/rtw88/config.gz > .config
           mkdir -p out
           cp .config out/.config
     
