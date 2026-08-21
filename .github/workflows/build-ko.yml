@@ -84,13 +84,6 @@ jobs:
             echo "KERNEL_COMMIT_MSG=$(git log -1 --format=%s)" >> $GITHUB_ENV
           fi
 
-
-      - name: Build kernel with bypass hack (disable module version checks)
-        uses: ./.github/actions/build-kernel
-        with:
-          bypass: true
-          version: ${{ inputs.kernel_version }}
-
       - name: Checkout rtl8812au driver (lwfinger/rtw88)
         uses: actions/checkout@v4
         with:
