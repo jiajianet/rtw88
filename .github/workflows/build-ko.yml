@@ -15,9 +15,6 @@ on:
         description: 'Kernel sublevel (e.g., 194)'
         required: false
         default: '194'
-      config_gz_url:
-        description: 'Public URL to your config.gz file'
-        required: true  # 强制用户提供
 
 jobs:
   build-module:
