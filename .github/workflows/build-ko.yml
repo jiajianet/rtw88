@@ -52,6 +52,14 @@ jobs:
           version: ${{ github.event.inputs.kernel_version }}
           sublevel: ${{ github.event.inputs.sublevel }}
 
+      # 编译 rtl8812au
+      - name: Checkout rtl8812au driver
+        uses: actions/checkout@v4
+        with:
+          repository: lwfinger/rtw88
+          path: rtw88
+          ref: master
+          
       - name: List files in workspace
         run: ls -la ${{ github.workspace }}
         
@@ -74,13 +82,7 @@ jobs:
           make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
           make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
 
-      # 编译 rtl8812au
-      - name: Checkout rtl8812au driver
-        uses: actions/checkout@v4
-        with:
-          repository: lwfinger/rtw88
-          path: rtw88
-          ref: master
+
 
       - name: Compile module
         run: |
