@@ -2,7 +2,6 @@ name: Build rtl8812au Kernel Module (GKI 5.15 Android13)
 
 on:
   workflow_dispatch:
-    # Optional inputs for flexibility, but defaults are set to the required target
     inputs:
       kernel_version:
         description: 'Kernel version (e.g., android13-5.15)'
@@ -17,11 +16,10 @@ jobs:
   build-module:
     runs-on: ubuntu-latest
     steps:
-
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y repo flex bison build-essential libssl-dev gcc-aarch64-linux-gnu
+          sudo apt-get install -y repo flex bison build-essential libssl-dev gcc-aarch64-linux-gnu clang lld llvm make
 
       - name: Initialize and sync kernel repository
         id: sync_kernel
@@ -91,21 +89,30 @@ jobs:
           path: rtw88
           ref: master
 
-      - name: Install build dependencies
+      # ---------- 新增：准备内核配置和模块编译环境 ----------
+      - name: Prepare kernel build for external modules
+        working-directory: ${{ github.workspace }}/kernel/common
         run: |
-          sudo apt update
-          sudo apt install -y clang lld llvm make
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export LLVM=1
+          export OUT_DIR=${{ github.workspace }}/kernel/out
 
+          # 生成默认配置文件（如果已有 .config 则沿用，否则生成）
+          make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
+          # 准备模块编译所需的所有中间文件
+          make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
+        shell: bash
+
+      # ---------- 编译外部模块 ----------
       - name: Compile rtl8812au kernel module
         run: |
-          # Use the same toolchain and output directory as the kernel build
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export LLVM=1
           export KERNEL_DIR=${{ github.workspace }}/kernel/common
-          export OUT_DIR=/home/runner/out   # matches build-kernel action
+          export OUT_DIR=${{ github.workspace }}/kernel/out
 
-          # Build external modules (rtw88 will build all supported modules)
           make -C $KERNEL_DIR O=$OUT_DIR M=${{ github.workspace }}/rtw88 modules
         shell: bash
 
