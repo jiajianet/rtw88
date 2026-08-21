@@ -55,7 +55,7 @@ jobs:
           # Artifact
           mkdir -p /github/workspace/out
           OUTPUT_NAME="rekernel-${{ inputs.kmi }}-${{ inputs.ddk_release }}.ko"
-          cp /opt/ddk/src/$KMI/drivers/android/rekernel.ko "/github/workspace/out/$OUTPUT_NAME"
+          cp /opt/ddk/src/$KMI/drivers/android/*.ko "/github/workspace/out/$OUTPUT_NAME"
           llvm-strip -d "/github/workspace/out/$OUTPUT_NAME"
           ls -la "/github/workspace/out/$OUTPUT_NAME"
 
