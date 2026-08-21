@@ -63,19 +63,6 @@ jobs:
           version: ${{ github.event.inputs.kernel_version }}
           bypass: 'false'
 
-      # --- 4. 准备外部模块编译环境 ---
-      - name: Prepare for external module build
-        working-directory: ${{ github.workspace }}/kernel
-        run: |
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export LLVM=1
-          export OUT_DIR=${{ github.workspace }}/kernel/out
-
-          # 基于 WildKernels 生成的 .config 进行依赖更新
-          make O=$OUT_DIR ARCH=arm64 LLVM=1 olddefconfig
-          make O=$OUT_DIR ARCH=arm64 LLVM=1 modules_prepare
-
       # --- 5. 编译 rtl8812au 外部模块 ---
       - name: Checkout rtl8812au driver (lwfinger/rtw88)
         uses: actions/checkout@v4
